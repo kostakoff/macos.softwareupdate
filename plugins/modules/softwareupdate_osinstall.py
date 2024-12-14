@@ -6,6 +6,19 @@ import os
 import platform
 import subprocess
 
+def get_macos_major_version():
+    """
+    Retrieves the major version of macOS.
+    Returns an integer if the version is determined, otherwise None.
+    """
+    version_str = platform.mac_ver()[0]
+    if version_str:
+        try:
+            return int(version_str.split('.')[0])
+        except ValueError:
+            return None
+    return None
+
 def main():
     module_args = dict(
         version=dict(type='int', required=True),
@@ -25,6 +38,15 @@ def main():
     # Проверяем root
     if os.geteuid() != 0:
         module.fail_json(msg="This module must be run as root (become: true). Current UID: {}".format(os.geteuid()))
+
+    # Get the major version of macOS
+    major_version = get_macos_major_version()
+    if major_version is None:
+        module.fail_json(msg="Failed to determine the macOS version.")
+    
+    # Verify that the major version is supported
+    if major_version not in [13, 14, 15]:
+        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
 
     version = module.params['version']
     username = module.params['username']
@@ -59,12 +81,16 @@ def main():
         # Запускаем команду
         subprocess.check_call(cmd, shell=False)
     except subprocess.CalledProcessError as e:
-        module.fail_json(msg=f"Failed to start OS install: {str(e)}")
+        module.fail_json(msg=f"Failed to start OS install: {str(e)}", macos_version=major_version)
 
     # Если мы дошли до сюда, то процесс стартовал в фоне.
     # Скорее всего начнется установка ОС и машина ребутнется.
     # Мы завершаем модуль сообщая что были изменения.
-    module.exit_json(changed=True, msg="OS installation started, the machine will reboot.")
+    module.exit_json(
+        changed=True, 
+        macos_version=major_version,
+        msg="OS installation started, the machine will reboot"
+    )
 
 
 if __name__ == '__main__':

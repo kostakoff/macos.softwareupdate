@@ -6,6 +6,19 @@ import subprocess
 import platform
 import re
 
+def get_macos_major_version():
+    """
+    Retrieves the major version of macOS.
+    Returns an integer if the version is determined, otherwise None.
+    """
+    version_str = platform.mac_ver()[0]
+    if version_str:
+        try:
+            return int(version_str.split('.')[0])
+        except ValueError:
+            return None
+    return None
+
 def main():
     module_args = dict(
         product=dict(
@@ -35,6 +48,15 @@ def main():
     if platform.system() != "Darwin":
         module.fail_json(msg="This module can only run on macOS (Darwin). Current OS: {}".format(platform.system()))
 
+    # Get the major version of macOS
+    major_version = get_macos_major_version()
+    if major_version is None:
+        module.fail_json(msg="Failed to determine the macOS version.")
+    
+    # Verify that the major version is supported
+    if major_version not in [13, 14, 15]:
+        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
+
     product_filter = module.params['product']
     version_pattern = module.params['version_pattern']
     version_regex = None
@@ -56,7 +78,7 @@ def main():
             universal_newlines=True
         )
     except subprocess.CalledProcessError as e:
-        module.fail_json(msg="Failed to run softwareupdate: {}".format(e.output))
+        module.fail_json(msg="Failed to run softwareupdate: {}".format(e.output), macos_version=major_version)
 
     # Определяем логику фильтрации по продуктам
     PRODUCT_PATTERNS = {
@@ -128,6 +150,7 @@ def main():
     module.exit_json(
         changed=False,
         updates=updates,
+        macos_version=major_version,
         msg="Updates listed successfully"
     )
 

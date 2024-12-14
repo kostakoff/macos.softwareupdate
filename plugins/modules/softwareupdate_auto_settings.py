@@ -6,6 +6,19 @@ import os
 import platform
 import subprocess
 
+def get_macos_major_version():
+    """
+    Retrieves the major version of macOS.
+    Returns an integer if the version is determined, otherwise None.
+    """
+    version_str = platform.mac_ver()[0]
+    if version_str:
+        try:
+            return int(version_str.split('.')[0])
+        except ValueError:
+            return None
+    return None
+
 def read_default(domain, key):
     """Читает значение ключа из defaults, возвращает True/False или None, если ключ отсутствует."""
     try:
@@ -23,8 +36,10 @@ def read_default(domain, key):
         return None
 
 def write_default(domain, key, value_bool, check_mode=False):
-    """Записывает значение ключа в defaults, если check_mode=False.
-       Возвращает True, если значение действительно было бы изменено, иначе False."""
+    """
+    Записывает значение ключа в defaults, если check_mode=False.
+    Возвращает True, если значение действительно было бы изменено, иначе False.
+    """
     current_value = read_default(domain, key)
     if current_value == value_bool:
         return False  # уже в нужном состоянии
@@ -37,7 +52,9 @@ def write_default(domain, key, value_bool, check_mode=False):
     return True
 
 def plutil_print(path):
-    """Возвращает вывод plutil -p <path> или None, если файл не существует или ошибка."""
+    """
+    Возвращает вывод plutil -p <path> или None, если файл не существует или ошибка.
+    """
     if not os.path.exists(path):
         return None
     try:
@@ -72,6 +89,15 @@ def main():
     # Проверяем root
     if os.geteuid() != 0:
         module.fail_json(msg="This module must be run as root (become: true). Current UID: {}".format(os.geteuid()))
+
+    # Get the major version of macOS
+    major_version = get_macos_major_version()
+    if major_version is None:
+        module.fail_json(msg="Failed to determine the macOS version.")
+    
+    # Verify that the major version is supported
+    if major_version not in [13, 14, 15]:
+        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
 
     check_mode = module.check_mode
     changed = False
@@ -108,7 +134,8 @@ def main():
     module.exit_json(
         changed=changed, 
         msg="Automatic update settings have been managed successfully.",
-        softwareupdate_plist=swu_plist
+        softwareupdate_plist=swu_plist,
+        macos_version=major_version
     )
 
 if __name__ == '__main__':

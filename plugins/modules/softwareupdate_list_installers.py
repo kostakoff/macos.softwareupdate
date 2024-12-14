@@ -6,9 +6,22 @@ import subprocess
 import re
 import platform
 
+def get_macos_major_version():
+    """
+    Retrieves the major version of macOS.
+    Returns an integer if the version is determined, otherwise None.
+    """
+    version_str = platform.mac_ver()[0]
+    if version_str:
+        try:
+            return int(version_str.split('.')[0])
+        except ValueError:
+            return None
+    return None
+
 def main():
     module_args = dict(
-        # Если вам нужны аргументы, можно определить их здесь
+        # Define your module arguments here if needed
     )
 
     module = AnsibleModule(
@@ -16,15 +29,24 @@ def main():
         supports_check_mode=True
     )
 
-    # Проверяем, что ОС — macOS (Darwin)
+    # Check that the OS is macOS (Darwin)
     if platform.system() != "Darwin":
         module.fail_json(msg="This module can only run on macOS (Darwin). Current OS: {}".format(platform.system()))
     
+    # Get the major version of macOS
+    major_version = get_macos_major_version()
+    if major_version is None:
+        module.fail_json(msg="Failed to determine the macOS version.")
+    
+    # Verify that the major version is supported
+    if major_version not in [13, 14, 15]:
+        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
+    
     if module.check_mode:
-        # В check_mode не делаем изменений
+        # In check_mode, do not make any changes
         module.exit_json(changed=False, msg="Check mode: no changes.")
 
-    # Запускаем команду softwareupdate
+    # Execute the softwareupdate command
     try:
         cmd_output = subprocess.check_output(
             ["softwareupdate", "--list-full-installers"],
@@ -32,9 +54,9 @@ def main():
             universal_newlines=True
         )
     except subprocess.CalledProcessError as e:
-        module.fail_json(msg="Failed to run softwareupdate: {}".format(e.output))
+        module.fail_json(msg="Failed to run softwareupdate: {}".format(e.output), macos_version=major_version)
 
-    # Паттерн для парсинга списка установщиков
+    # Pattern to parse the list of installers
     pattern = re.compile(
         r"^\* Title:\s+(.*?), Version:\s+(.*?), Size:\s+(\d+)(?:KiB)?, Build:\s+(\S+), Deferred:\s+(.*)$"
     )
@@ -51,7 +73,7 @@ def main():
                 build = match.group(4).strip()
                 deferred = match.group(5).strip()
 
-                # Преобразуем размер
+                # Convert size
                 try:
                     size = int(size_str)
                 except ValueError:
@@ -68,7 +90,8 @@ def main():
     module.exit_json(
         changed=False,
         installers=installers,
-        msg="Installers listed successfully"
+        macos_version=major_version,
+        msg="Installers listed successfully."
     )
 
 

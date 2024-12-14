@@ -67,6 +67,19 @@ changed:
   type: bool
 '''
 
+def get_macos_major_version():
+    """
+    Retrieves the major version of macOS.
+    Returns an integer if the version is determined, otherwise None.
+    """
+    version_str = platform.mac_ver()[0]
+    if version_str:
+        try:
+            return int(version_str.split('.')[0])
+        except ValueError:
+            return None
+    return None
+
 def check_log_for_progress(log_path, timeout=30, interval=3):
     """Проверяет лог на наличие строки 'Downloading: {x.x}%' в течение указанного времени."""
     start_time = time.time()
@@ -105,6 +118,15 @@ def main():
     if os.geteuid() != 0:
         module.fail_json(msg="This module must be run as root (become: true). Current UID: {}".format(os.geteuid()))
 
+    # Get the major version of macOS
+    major_version = get_macos_major_version()
+    if major_version is None:
+        module.fail_json(msg="Failed to determine the macOS version.")
+    
+    # Verify that the major version is supported
+    if major_version not in [13, 14, 15]:
+        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
+
     label = module.params['label']
     username = module.params['username']
     password = module.params['password']
@@ -118,13 +140,13 @@ def main():
             universal_newlines=True
         )
     except subprocess.CalledProcessError as e:
-        module.fail_json(msg="Failed to run 'softwareupdate --list': {}".format(e.output))
+        module.fail_json(msg="Failed to run 'softwareupdate --list': {}".format(e.output), macos_version=major_version)
 
     label_pattern = re.compile(r"^\* Label:\s+(.+)$", re.MULTILINE)
     labels_found = label_pattern.findall(list_output)
 
     if label not in labels_found:
-        module.fail_json(msg="Update with label '{}' not found in available updates.".format(label))
+        module.fail_json(msg="Update with label '{}' not found in available updates.".format(label), macos_version=major_version)
 
     # Формируем команду с nohup и stdinpass
     cmd = "echo '{password}' | nohup softwareupdate --install \"{label}\" --agree-to-license --verbose --no-scan --restart --stdinpass --user \"{username}\" > {log_path} 2>&1 &".format(
@@ -138,15 +160,19 @@ def main():
     try:
         subprocess.check_call(cmd, shell=True)
     except subprocess.CalledProcessError as e:
-        module.fail_json(msg="Failed to start update '{}'. Error: {}".format(label, str(e)))
+        module.fail_json(msg="Failed to start update '{}'. Error: {}".format(label, str(e)), macos_version=major_version)
 
     # Проверяем, что процесс начался (ищем строку "Downloading: {x.x}%")
     if not check_log_for_progress(log_path, timeout=30, interval=3):
         # Если строка так и не появилась в течение таймаута
-        module.fail_json(msg="Update '{}' failed to start downloading. Check log: {}".format(label, log_path))
+        module.fail_json(msg="Update '{}' failed to start downloading. Check log: {}".format(label, log_path), macos_version=major_version)
 
     # Если мы здесь, обновление успешно запустилось
-    module.exit_json(changed=True, msg="Update '{}' installation started successfully in background.".format(label))
+    module.exit_json(
+        changed=True, 
+        macos_version=major_version,
+        msg="Update '{}' installation started successfully in background.".format(label)
+    )
 
 if __name__ == '__main__':
     main()
