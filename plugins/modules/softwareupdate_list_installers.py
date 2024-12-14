@@ -8,8 +8,8 @@ import platform
 
 def get_macos_major_version():
     """
-    Retrieves the major version of macOS.
-    Returns an integer if the version is determined, otherwise None.
+    Получает мажорную версию macOS.
+    Возвращает целое число, если версия определена, иначе None.
     """
     version_str = platform.mac_ver()[0]
     if version_str:
@@ -19,9 +19,17 @@ def get_macos_major_version():
             return None
     return None
 
+def parse_version(version_str):
+    """
+    Преобразует строку версии в кортеж чисел для корректной сортировки.
+    Пример: "15.1.1" -> (15, 1, 1)
+    """
+    return tuple(int(part) for part in version_str.split('.') if part.isdigit())
+
 def main():
     module_args = dict(
-        # Define your module arguments here if needed
+        latest_only=dict(type='bool', required=False, default=False),
+        version_pattern=dict(type='str', required=False, default=None)
     )
 
     module = AnsibleModule(
@@ -29,24 +37,35 @@ def main():
         supports_check_mode=True
     )
 
-    # Check that the OS is macOS (Darwin)
+    # Проверяем, что ОС — macOS (Darwin)
     if platform.system() != "Darwin":
         module.fail_json(msg="This module can only run on macOS (Darwin). Current OS: {}".format(platform.system()))
-    
-    # Get the major version of macOS
+
+    # Получаем мажорную версию macOS
     major_version = get_macos_major_version()
     if major_version is None:
         module.fail_json(msg="Failed to determine the macOS version.")
-    
-    # Verify that the major version is supported
+
+    # Проверяем, что мажорная версия входит в допустимые значения
     if major_version not in [13, 14, 15]:
-        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
+        module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version), macos_version=major_version)
+
+    # Получаем значение параметра 'latest_only'
+    latest_only = module.params.get('latest_only')
+    version_pattern = module.params['version_pattern']
+    version_regex = None
+
+    if version_pattern:
+        try:
+            version_regex = re.compile(version_pattern)
+        except re.error as e:
+            module.fail_json(msg="Invalid version_pattern regex: {}".format(str(e)))
     
     if module.check_mode:
-        # In check_mode, do not make any changes
-        module.exit_json(changed=False, msg="Check mode: no changes.")
+        # В check_mode не делаем изменений
+        module.exit_json(changed=False, msg="Check mode: no changes.", macos_version=major_version)
 
-    # Execute the softwareupdate command
+    # Запускаем команду softwareupdate
     try:
         cmd_output = subprocess.check_output(
             ["softwareupdate", "--list-full-installers"],
@@ -56,7 +75,7 @@ def main():
     except subprocess.CalledProcessError as e:
         module.fail_json(msg="Failed to run softwareupdate: {}".format(e.output), macos_version=major_version)
 
-    # Pattern to parse the list of installers
+    # Паттерн для парсинга списка установщиков
     pattern = re.compile(
         r"^\* Title:\s+(.*?), Version:\s+(.*?), Size:\s+(\d+)(?:KiB)?, Build:\s+(\S+), Deferred:\s+(.*)$"
     )
@@ -73,11 +92,15 @@ def main():
                 build = match.group(4).strip()
                 deferred = match.group(5).strip()
 
-                # Convert size
+                # Преобразуем размер
                 try:
                     size = int(size_str)
                 except ValueError:
                     size = size_str
+
+                # Применяем фильтр по версии, если указан
+                if version_regex and not version_regex.match(version):
+                    continue
 
                 installers.append({
                     "title": title,
@@ -86,6 +109,40 @@ def main():
                     "build": build,
                     "deferred": deferred
                 })
+
+    if latest_only:
+        # Группируем установщики по мажорной версии и выбираем последнюю версию для каждой группы
+        latest_installers = {}
+        for installer in installers:
+            # Извлекаем мажорную версию из полной версии
+            major_ver = installer['version'].split('.')[0]
+            try:
+                major_ver_int = int(major_ver)
+            except ValueError:
+                continue  # Пропускаем, если мажорная версия не число
+
+            # Если мажорная версия уже в словаре, сравниваем версии
+            if major_ver_int in latest_installers:
+                current_latest = latest_installers[major_ver_int]
+                if parse_version(installer['version']) > parse_version(current_latest['version']):
+                    latest_installers[major_ver_int] = installer
+            else:
+                latest_installers[major_ver_int] = installer
+
+        # Преобразуем словарь в список и сортируем по мажорной версии в порядке убывания
+        installers = sorted(
+            latest_installers.values(),
+            key=lambda x: int(x['version'].split('.')[0]),
+            reverse=True
+        )
+
+    else:
+        # Сортируем полный список установщиков по версии в порядке убывания
+        installers = sorted(
+            installers,
+            key=lambda x: parse_version(x['version']),
+            reverse=True
+        )
 
     module.exit_json(
         changed=False,
