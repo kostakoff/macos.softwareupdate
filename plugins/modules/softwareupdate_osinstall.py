@@ -6,6 +6,99 @@ import os
 import platform
 import subprocess
 
+DOCUMENTATION = r'''
+---
+module: softwareupdate_osinstall
+short_description: Initiate macOS installation using the startosinstall command.
+description:
+  - >
+    This module initiates the installation of macOS from macOS installer application.
+    It requires root privileges and supports only major macOS versions 13, 14, and 15.
+    The module runs the installation process in the background, allowing the machine to reboot automatically.
+version_added: "1.0.1"
+author:
+  - kostakoff
+options:
+  version:
+    description:
+      - >
+        The major version number of macOS to install. Supported versions are 13 (Ventura), 14 (Sonoma), and 15 (Sequoia).
+    type: int
+    required: true
+  username:
+    description:
+      - >
+        The username of the user to accept license greement.
+    type: str
+    required: true
+  password:
+    description:
+      - >
+        The password of the user to accept license greement.
+    type: str
+    required: true
+    no_log: true
+'''
+
+EXAMPLES = r'''
+# Инициировать установку macOS Ventura (версия 13)
+- name: Start macOS Ventura installation
+  softwareupdate_osinstall:
+    version: 13
+    username: admin_user
+    password: "secure_password"
+
+# Инициировать установку macOS Sonoma (версия 14)
+- name: Start macOS Sonoma installation
+  softwareupdate_osinstall:
+    version: 14
+    username: admin_user
+    password: "secure_password"
+
+# Пример использования в playbook
+- name: Initiate macOS installation
+  hosts: localhost
+  become: yes
+  gather_facts: no
+  tasks:
+    - name: Start macOS Ventura installation
+      softwareupdate_osinstall:
+        version: 13
+        username: admin_user
+        password: "secure_password"
+      register: install_result
+
+    - name: Display installation result
+      debug:
+        var: install_result
+
+    - name: Start macOS Sonoma installation
+      softwareupdate_osinstall:
+        version: 14
+        username: admin_user
+        password: "secure_password"
+      register: install_result_sonoma
+
+    - name: Display installation result for Sonoma
+      debug:
+        var: install_result_sonoma
+'''
+
+RETURN = r'''
+changed:
+  description: Indicates if the module initiated a macOS installation.
+  type: bool
+  returned: always
+msg:
+  description: A message indicating the result of the module execution.
+  type: str
+  returned: always
+macos_version:
+  description: The major version of macOS on which the module was executed.
+  type: int
+  returned: always
+'''
+
 def get_macos_major_version():
     """
     Retrieves the major version of macOS.

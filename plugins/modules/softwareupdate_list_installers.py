@@ -6,6 +6,94 @@ import subprocess
 import re
 import platform
 
+DOCUMENTATION = r'''
+---
+module: softwareupdate_list_installers
+short_description: Retrieve a list of available macOS installers.
+description:
+  - This module retrieves a list of available macOS installers using the `softwareupdate` command.
+    It supports filtering to return only the latest versions for each major macOS version.
+version_added: "1.0.0"
+author:
+  - kostakoff
+options:
+  latest_only:
+    description:
+      - When set to true, the module returns only the latest installer for each major macOS version.
+      - If false, it returns the full list of available installers.
+    type: bool
+    required: false
+    default: false
+  version_pattern:
+    description:
+      - A regex pattern to filter updates by their version.
+      - Only updates matching this pattern will be returned.
+    type: str
+    required: false
+    default: null
+'''
+
+EXAMPLES = r'''
+# Получить полный список доступных установщиков macOS
+- name: Retrieve full list of macOS installers
+  softwareupdate_list_installers:
+
+# Получить только последние версии установщиков для каждой мажорной версии macOS
+- name: Retrieve only the latest installers for each macOS major version
+  softwareupdate_list_installers:
+    latest_only: true
+
+# Пример использования в задачах Ansible
+- name: Get the latest macOS installers
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Retrieve latest installers
+      softwareupdate_list_installers:
+        latest_only: true
+      register: result
+
+    - name: Display the latest installers
+      debug:
+        var: result
+'''
+
+RETURN = r'''
+changed:
+  description: Indicates if any changes were made by the module.
+  type: bool
+  returned: always
+installers:
+  description: A list of available macOS installers.
+  type: list
+  returned: always
+  elements: dict
+  contains:
+    title:
+      description: The name of the macOS installer.
+      type: str
+    version:
+      description: The version number of the macOS installer.
+      type: str
+    size_kib:
+      description: The size of the installer in KiB.
+      type: int
+    build:
+      description: The build identifier of the macOS installer.
+      type: str
+    deferred:
+      description: Indicates if the installer download is deferred.
+      type: str
+macos_version:
+  description: The major version of macOS on which the module was executed.
+  type: int
+  returned: always
+msg:
+  description: A message indicating the result of the module execution.
+  type: str
+  returned: always
+'''
+
 def get_macos_major_version():
     """
     Получает мажорную версию macOS.

@@ -6,10 +6,126 @@ import subprocess
 import platform
 import re
 
+DOCUMENTATION = r'''
+---
+module: softwareupdate_list_updates
+short_description: Retrieve a list of available macOS updates.
+description:
+  - This module retrieves a list of available macOS updates using the `softwareupdate` command.
+    It supports filtering by product type and version pattern.
+version_added: "1.0.1"
+author:
+  - kostakoff
+options:
+  product:
+    description:
+      - Specifies the type of product updates to retrieve.
+      - Can be set to `all` to retrieve all updates or to a specific product type.
+    type: str
+    required: false
+    default: all
+    choices:
+      - all
+      - macos
+      - xcode
+      - command_line_tools
+      - safari
+      - security
+      - firmware
+      - printer_drivers
+  version_pattern:
+    description:
+      - A regex pattern to filter updates by their version.
+      - Only updates matching this pattern will be returned.
+    type: str
+    required: false
+    default: null
+'''
+
+EXAMPLES = r'''
+# Получить все доступные обновления
+- name: Retrieve all available macOS updates
+  softwareupdate_list_updates:
+
+# Получить только обновления для macOS
+- name: Retrieve only macOS updates
+  softwareupdate_list_updates:
+    product: macos
+
+# Получить обновления для macOS с версией 14
+- name: Retrieve Xcode updates version 14
+  softwareupdate_list_updates:
+    product: macos
+    version_pattern: '^14\.'
+
+# Пример использования в задачах Ansible
+- name: Получить обновления macOS и Xcode с определёнными версиями
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Retrieve macOS updates
+      softwareupdate_list_updates:
+        product: macos
+      register: macos_updates
+
+    - name: Retrieve Xcode updates version 16
+      softwareupdate_list_updates:
+        product: xcode
+        version_pattern: '^16\.'
+      register: xcode_updates
+
+    - name: Вывести macOS обновления
+      debug:
+        var: macos_updates
+
+    - name: Вывести Xcode обновления
+      debug:
+        var: xcode_updates
+'''
+
+RETURN = r'''
+changed:
+  description: Indicates if any changes were made by the module.
+  type: bool
+  returned: always
+updates:
+  description: A list of available macOS updates.
+  type: list
+  returned: always
+  elements: dict
+  contains:
+    label:
+      description: The label identifier of the update.
+      type: str
+    title:
+      description: The title of the update.
+      type: str
+    version:
+      description: The version number of the update.
+      type: str
+    size_kib:
+      description: The size of the update in KiB.
+      type: int
+    recommended:
+      description: Indicates if the update is recommended.
+      type: str
+    action:
+      description: The required action for the update (e.g., restart).
+      type: str
+macos_version:
+  description: The major version of macOS on which the module was executed.
+  type: int
+  returned: always
+msg:
+  description: A message indicating the result of the module execution.
+  type: str
+  returned: always
+'''
+
 def get_macos_major_version():
     """
-    Retrieves the major version of macOS.
-    Returns an integer if the version is determined, otherwise None.
+    Получает мажорную версию macOS.
+    Возвращает целое число, если версия определена, иначе None.
     """
     version_str = platform.mac_ver()[0]
     if version_str:
@@ -48,12 +164,12 @@ def main():
     if platform.system() != "Darwin":
         module.fail_json(msg="This module can only run on macOS (Darwin). Current OS: {}".format(platform.system()))
 
-    # Get the major version of macOS
+    # Получаем мажорную версию macOS
     major_version = get_macos_major_version()
     if major_version is None:
         module.fail_json(msg="Failed to determine the macOS version.")
     
-    # Verify that the major version is supported
+    # Проверяем, что мажорная версия входит в допустимые значения
     if major_version not in [13, 14, 15]:
         module.fail_json(msg="This module supports only macOS major versions 13, 14, or 15. Current version: {}".format(major_version))
 

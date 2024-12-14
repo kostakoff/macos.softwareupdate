@@ -6,6 +6,120 @@ import os
 import platform
 import subprocess
 
+DOCUMENTATION = r'''
+---
+module: softwareupdate_auto_settings
+short_description: Manage automatic macOS update settings.
+description:
+  - This module manages automatic macOS update settings using the `defaults` command.
+    It allows enabling or disabling various automatic update options such as checking for updates, downloading, installing, etc.
+version_added: "1.0.0"
+author:
+  - kostakoff
+options:
+  automatic_check_enabled:
+    description:
+      - Enable or disable automatic checking for updates.
+    type: bool
+    required: false
+  automatic_download:
+    description:
+      - Enable or disable automatic downloading of updates.
+    type: bool
+    required: false
+  automatically_install_macos_updates:
+    description:
+      - Enable or disable automatic installation of macOS updates.
+    type: bool
+    required: false
+  config_data_install:
+    description:
+      - Enable or disable automatic installation of configuration data.
+    type: bool
+    required: false
+  critical_update_install:
+    description:
+      - Enable or disable automatic installation of critical updates.
+    type: bool
+    required: false
+  app_auto_update:
+    description:
+      - Enable or disable automatic app updates.
+    type: bool
+    required: false
+'''
+
+EXAMPLES = r'''
+# Включить автоматическую проверку и загрузку обновлений
+- name: Enable automatic check and download of updates
+  softwareupdate_auto_settings:
+    automatic_check_enabled: true
+    automatic_download: true
+
+# Отключить автоматическую установку обновлений macOS
+- name: Disable automatic installation of macOS updates
+  softwareupdate_auto_settings:
+    automatically_install_macos_updates: false
+
+# Включить автоматическое обновление приложений
+- name: Enable automatic app updates
+  softwareupdate_auto_settings:
+    app_auto_update: true
+
+# Пример использования в playbook
+- name: Manage automatic macOS update settings
+  hosts: localhost
+  become: yes
+  gather_facts: no
+  tasks:
+    - name: Enable automatic check and download of updates
+      softwareupdate_auto_settings:
+        automatic_check_enabled: true
+        automatic_download: true
+      register: check_download_result
+
+    - name: Display the result of enabling check and download
+      debug:
+        var: check_download_result
+
+    - name: Disable automatic installation of macOS updates
+      softwareupdate_auto_settings:
+        automatically_install_macos_updates: false
+      register: disable_install_result
+
+    - name: Display the result of disabling installation
+      debug:
+        var: disable_install_result
+
+    - name: Enable automatic app updates
+      softwareupdate_auto_settings:
+        app_auto_update: true
+      register: app_update_result
+
+    - name: Display the result of enabling app updates
+      debug:
+        var: app_update_result
+'''
+
+RETURN = r'''
+changed:
+  description: Indicates if any changes were made by the module.
+  type: bool
+  returned: always
+msg:
+  description: A message indicating the result of the module execution.
+  type: str
+  returned: always
+softwareupdate_plist:
+  description: Output of the `plutil -p` command for the SoftwareUpdate preferences plist.
+  type: str
+  returned: always
+macos_version:
+  description: The major version of macOS on which the module was executed.
+  type: int
+  returned: always
+'''
+
 def get_macos_major_version():
     """
     Retrieves the major version of macOS.
