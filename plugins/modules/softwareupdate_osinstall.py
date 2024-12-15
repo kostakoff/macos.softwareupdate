@@ -5,6 +5,8 @@ from ansible.module_utils.basic import AnsibleModule
 import os
 import platform
 import subprocess
+import time
+import re
 
 DOCUMENTATION = r'''
 ---
@@ -112,6 +114,24 @@ def get_macos_major_version():
             return None
     return None
 
+def check_log_for_progress(log_path, timeout=30, interval=3):
+    """Проверяет лог на наличие строки 'Preparing: {x.x}%' в течение указанного времени."""
+    start_time = time.time()
+    download_pattern = re.compile(r"Preparing: \d+\.\d+%")
+
+    while time.time() - start_time < timeout:
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r') as log_file:
+                    log_content = log_file.read()
+                    if download_pattern.search(log_content):
+                        return True
+            except Exception as e:
+                # Игнорируем ошибки чтения лог-файла
+                pass
+        time.sleep(interval)
+    return False
+
 def main():
     module_args = dict(
         version=dict(type='int', required=True),
@@ -144,6 +164,7 @@ def main():
     version = module.params['version']
     username = module.params['username']
     password = module.params['password']
+    log_path = "/tmp/startosinstall.log"
 
     # Сопоставляем мажорную версию с именем установщика
     # При необходимости можно расширить словарь новыми версиями
@@ -167,7 +188,7 @@ def main():
     # Вывод перенаправим в лог /tmp/startosinstall.log
     cmd = [
         "sh", "-c",
-        f"echo '{password}' | nohup '{installer_path}' --agreetolicense --forcequitapps --nointeraction --user '{username}' --stdinpass > /tmp/startosinstall.log 2>&1 &"
+        f"echo '{password}' | nohup '{installer_path}' --agreetolicense --forcequitapps --nointeraction --user '{username}' --stdinpass > '{log_path}' 2>&1 &"
     ]
 
     try:
@@ -175,6 +196,11 @@ def main():
         subprocess.check_call(cmd, shell=False)
     except subprocess.CalledProcessError as e:
         module.fail_json(msg=f"Failed to start OS install: {str(e)}", macos_version=major_version)
+
+    # Проверяем, что процесс начался (ищем строку "Preparing: {x.x}%")
+    if not check_log_for_progress(log_path, timeout=30, interval=3):
+        # Если строка так и не появилась в течение таймаута
+        module.fail_json(msg="MacOS installer '{}' failed to start installing. Check log: {}".format(installer_app, log_path), macos_version=major_version)
 
     # Если мы дошли до сюда, то процесс стартовал в фоне.
     # Скорее всего начнется установка ОС и машина ребутнется.
