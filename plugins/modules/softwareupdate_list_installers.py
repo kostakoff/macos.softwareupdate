@@ -165,7 +165,7 @@ def main():
 
     # Паттерн для парсинга списка установщиков
     pattern = re.compile(
-        r"^\* Title:\s+(.*?), Version:\s+(.*?), Size:\s+(\d+)(?:KiB)?, Build:\s+(\S+), Deferred:\s+(.*)$"
+        r"^\* Title:\s+(.*?), Version:\s+(.*?), Size:\s+(.*?), Build:\s+(\S+), Deferred:\s+(.*)$"
     )
 
     installers = []
@@ -180,12 +180,6 @@ def main():
                 build = match.group(4).strip()
                 deferred = match.group(5).strip()
 
-                # Преобразуем размер
-                try:
-                    size = int(size_str)
-                except ValueError:
-                    size = size_str
-
                 # Применяем фильтр по версии, если указан
                 if version_regex and not version_regex.match(version):
                     continue
@@ -193,7 +187,7 @@ def main():
                 installers.append({
                     "title": title,
                     "version": version,
-                    "size_kib": size,
+                    "size": size_str,
                     "build": build,
                     "deferred": deferred
                 })

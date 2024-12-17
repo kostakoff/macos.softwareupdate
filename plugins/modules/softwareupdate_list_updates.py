@@ -215,7 +215,7 @@ def main():
     # Пример:
     # Title: macOS Sonoma 14.7.1, Version: 14.7.1, Size: 2387500KiB, Recommended: YES, Action: restart,
     title_pattern = re.compile(
-        r"^\s*Title:\s+(.*?),\s*Version:\s+(.*?),\s*Size:\s+(\d+)(?:KiB)?,\s*Recommended:\s+(YES|NO)(?:,\s*Action:\s*(\S+))?,?$"
+        r"^\s*Title:\s+(.*?),\s*Version:\s+(.*?),\s*Size:\s+(.*?),\s*Recommended:\s+(YES|NO)(?:,\s*Action:\s*(\S+))?,?$"
     )
 
     current_label = None
@@ -235,12 +235,6 @@ def main():
                 recommended = m.group(4).strip()
                 action = m.group(5) if m.group(5) else None
 
-                # Конвертируем размер
-                try:
-                    size = int(size_str)
-                except ValueError:
-                    size = size_str
-
                 # Применяем фильтр по продукту
                 if not PRODUCT_PATTERNS[product_filter](title_str):
                     current_label = None
@@ -256,7 +250,7 @@ def main():
                     "label": current_label,
                     "title": title_str,
                     "version": version,
-                    "size_kib": size,
+                    "size": size_str,
                     "recommended": recommended,
                     "action": action
                 })
